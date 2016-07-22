@@ -32,16 +32,25 @@ var app = {} as App;
 // Our own classes to add functionality
 // -----------------------------------------------------------------------------
 
-// Base classes for game contract.
-
-interface GameObject extends PIXI.Container {
+// GameObject is the base contract that game objects must fulfill.
+interface GameObject {
+	// We want to be able to sort our objects by a z index for display order.
 	z: number;
-	// game_update(): void;
+
+	// The children are updated by the updater.
 	children: GameObject[];
+
+	// The updater updates the self and the children.
 	updater: SelfUpdater;
+
+	// Never call update() directly. Only implement it. It's the updater's job
+	// to call update().
 	update(): void;
 }
 
+// SelfUpdater is a helper class so that classes that fulfill the GameObject
+// contract can easily implement the correct behavior by just having an instance
+// of one of these.
 class SelfUpdater {
 	constructor(public parent: GameObject) {};
 	game_update(): void {
@@ -52,8 +61,20 @@ class SelfUpdater {
 	}
 }
 
-// Our own classes that implement the base object.
+// Our own base classes that implement the base object. The redundancy (setting
+// all of the base properties each time) is annoying but finite---there are only
+// a few core pixi classes. All actual classes that we make will subclass from
+// these few and will *only* describe unique behavior.
 
+// Base class for on screen objects with multiple visible components.
+class MaxContainer extends PIXI.Container implements GameObject {
+	z = 0;
+	children = [];
+	updater = new SelfUpdater(this);
+	update(): void {};
+}
+
+// Base class for on screen line-art.
 class MaxGraphics extends PIXI.Graphics implements GameObject {
 	z = 0;
 	children = [];
@@ -61,6 +82,7 @@ class MaxGraphics extends PIXI.Graphics implements GameObject {
 	update(): void {};
 };
 
+// Base class for on screen text.
 class MaxText extends PIXI.Text implements GameObject {
 	z = 0;
 	children = [];
@@ -68,38 +90,25 @@ class MaxText extends PIXI.Text implements GameObject {
 	update(): void {};
 };
 
-abstract class MaxSprite extends PIXI.Sprite implements GameObject {
+// Base class for on screen sprites.
+class MaxSprite extends PIXI.Sprite implements GameObject {
 	z = 0;
 	children = [];
 	updater = new SelfUpdater(this);
-	abstract update(): void;
+	update(): void {};
 }
 
-class Planet extends MaxSprite implements GameObject {
+// Actual "meat" classes with specific behavior are below.
+
+class Planet extends MaxSprite {
 	bar: ProgressBar;
 	update(): void {
 		this.rotation += 0.001;
 	}
 }
 
-interface StringSpriteMap {
-	[name: string]: MaxSprite;
-}
 
-function depthCompare(a: GameObject, b: GameObject) {
-	if (a.z < b.z) {
-		return -1;
-	} if (a.z > b.z) {
-		return 1;
-	}
-	return 0;
-}
-
-// some real meat
-
-class ProgressBar extends PIXI.Container implements GameObject {
-	// static
-
+class ProgressBar extends MaxContainer {
 	static from_parent(parent: MaxSprite): ProgressBar {
 		var lx = Math.floor(parent.x - parent.width*(1-parent.anchor.x));
 		var ly = Math.floor(parent.y + parent.height*(1-parent.anchor.y));
@@ -110,12 +119,6 @@ class ProgressBar extends PIXI.Container implements GameObject {
 		parent.addChild(p);
 		return p
 	}
-
-	// instance
-
-	z = 0;
-	children = [];
-	updater = new SelfUpdater(this);
 
 	start: number = -1;
 	goal: number = -1;
@@ -170,6 +173,25 @@ class ProgressBar extends PIXI.Container implements GameObject {
 			}
 		}
 	}
+}
+
+
+// These interfaces are for convenience.
+
+interface StringSpriteMap {
+	[name: string]: MaxSprite;
+}
+
+// We only care about GameObjects, but pixi expects something that can work with
+// DisplayObjects when sorting container elements, so we have to satisfy it.
+interface DisplayAndGameObject extends PIXI.DisplayObject, GameObject {}
+function depthCompare(a: DisplayAndGameObject, b: DisplayAndGameObject) {
+	if (a.z < b.z) {
+		return -1;
+	} if (a.z > b.z) {
+		return 1;
+	}
+	return 0;
 }
 
 function dbg(text: string) {

@@ -14,6 +14,9 @@ var Constants = (function () {
     return Constants;
 }());
 var app = {};
+// SelfUpdater is a helper class so that classes that fulfill the GameObject
+// contract can easily implement the correct behavior by just having an instance
+// of one of these.
 var SelfUpdater = (function () {
     function SelfUpdater(parent) {
         this.parent = parent;
@@ -28,7 +31,24 @@ var SelfUpdater = (function () {
     };
     return SelfUpdater;
 }());
-// Our own classes that implement the base object.
+// Our own base classes that implement the base object. The redundancy (setting
+// all of the base properties each time) is annoying but finite---there are only
+// a few core pixi classes. All actual classes that we make will subclass from
+// these few and will *only* describe unique behavior.
+// Base class for on screen objects with multiple visible components.
+var MaxContainer = (function (_super) {
+    __extends(MaxContainer, _super);
+    function MaxContainer() {
+        _super.apply(this, arguments);
+        this.z = 0;
+        this.children = [];
+        this.updater = new SelfUpdater(this);
+    }
+    MaxContainer.prototype.update = function () { };
+    ;
+    return MaxContainer;
+}(PIXI.Container));
+// Base class for on screen line-art.
 var MaxGraphics = (function (_super) {
     __extends(MaxGraphics, _super);
     function MaxGraphics() {
@@ -42,6 +62,7 @@ var MaxGraphics = (function (_super) {
     return MaxGraphics;
 }(PIXI.Graphics));
 ;
+// Base class for on screen text.
 var MaxText = (function (_super) {
     __extends(MaxText, _super);
     function MaxText() {
@@ -55,6 +76,7 @@ var MaxText = (function (_super) {
     return MaxText;
 }(PIXI.Text));
 ;
+// Base class for on screen sprites.
 var MaxSprite = (function (_super) {
     __extends(MaxSprite, _super);
     function MaxSprite() {
@@ -63,8 +85,11 @@ var MaxSprite = (function (_super) {
         this.children = [];
         this.updater = new SelfUpdater(this);
     }
+    MaxSprite.prototype.update = function () { };
+    ;
     return MaxSprite;
 }(PIXI.Sprite));
+// Actual "meat" classes with specific behavior are below.
 var Planet = (function (_super) {
     __extends(Planet, _super);
     function Planet() {
@@ -75,16 +100,6 @@ var Planet = (function (_super) {
     };
     return Planet;
 }(MaxSprite));
-function depthCompare(a, b) {
-    if (a.z < b.z) {
-        return -1;
-    }
-    if (a.z > b.z) {
-        return 1;
-    }
-    return 0;
-}
-// some real meat
 var ProgressBar = (function (_super) {
     __extends(ProgressBar, _super);
     function ProgressBar(x, y, w, h) {
@@ -93,10 +108,6 @@ var ProgressBar = (function (_super) {
         this.y = y;
         this.w = w;
         this.h = h;
-        // instance
-        this.z = 0;
-        this.children = [];
-        this.updater = new SelfUpdater(this);
         this.start = -1;
         this.goal = -1;
         this.outline = new MaxGraphics();
@@ -104,7 +115,6 @@ var ProgressBar = (function (_super) {
         app.stage.addChild(this.outline);
         app.stage.addChild(this.fill);
     }
-    // static
     ProgressBar.from_parent = function (parent) {
         var lx = Math.floor(parent.x - parent.width * (1 - parent.anchor.x));
         var ly = Math.floor(parent.y + parent.height * (1 - parent.anchor.y));
@@ -154,7 +164,16 @@ var ProgressBar = (function (_super) {
         }
     };
     return ProgressBar;
-}(PIXI.Container));
+}(MaxContainer));
+function depthCompare(a, b) {
+    if (a.z < b.z) {
+        return -1;
+    }
+    if (a.z > b.z) {
+        return 1;
+    }
+    return 0;
+}
 function dbg(text) {
     app.debugText.text += text + '\n';
 }
