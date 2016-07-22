@@ -5,7 +5,7 @@ var __extends = (this && this.__extends) || function (d, b) {
     function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
-// GLOBAL OBJECT: app
+// Constants in this class (needs not be instantiated)
 // -----------------------------------------------------------------------------
 var Constants = (function () {
     function Constants() {
@@ -28,17 +28,7 @@ var SelfUpdater = (function () {
     };
     return SelfUpdater;
 }());
-// abstract class AbstractGameObject extends PIXI.DisplayObject implements GameObject {
-// 	z: number = 0;
-// 	children: GameObject[];
-// 	game_update(): void {
-// 		this.update();
-// 		for (var child of this.children) {
-// 			child.game_update();
-// 		}
-// 	}
-// 	abstract update(): void;
-// }
+// Our own classes that implement the base object.
 var MaxGraphics = (function (_super) {
     __extends(MaxGraphics, _super);
     function MaxGraphics() {
@@ -106,8 +96,8 @@ var ProgressBar = (function (_super) {
         // instance
         this.z = 0;
         this.children = [];
-        this.start = -1;
         this.updater = new SelfUpdater(this);
+        this.start = -1;
         this.goal = -1;
         this.outline = new MaxGraphics();
         this.fill = new MaxGraphics();
@@ -179,31 +169,6 @@ function earthClick(event) {
     }
     // drawProgressOutline();
 }
-// function drawProgressOutline() {
-// 	// var g = new PIXI.Graphics();
-// 	var g = new MaxGraphics();
-// 	g.z = 2;
-// 	var earth: PIXI.Sprite = app.sprites['earth'];
-// 	var lx = Math.floor(earth.x - earth.width*(1-earth.anchor.x));
-// 	var ly = Math.floor(earth.y + earth.height*(1-earth.anchor.y));
-// 	var lw = Math.floor(earth.width);
-// 	var lh = 29;
-// 	console.log(lx);
-// 	console.log(ly);
-// 	console.log(lw);
-// 	console.log(lh);
-// 	// g.beginFill(0x7decfd, 0.0);
-// 	g.lineStyle(1, 0xffffff, 0.8);
-// 	// g.lineColor = 0xffffff;
-// 	// g.lineWidth = 1;
-// 	g.moveTo(lx, ly);
-// 	g.lineTo(lx, ly+lh);
-// 	g.lineTo(lx+lw, ly+lh);
-// 	g.lineTo(lx+lw, ly);
-// 	g.lineTo(lx, ly);
-// 	g.endFill();
-// 	app.stage.addChild(g)
-// }
 function drawGrid() {
     // settings
     var xstep = 100;
@@ -238,9 +203,6 @@ function drawGrid() {
     }
     g.endFill();
     app.stage.addChild(g);
-    // for (var txt in ts) {
-    // 	app.stage.addChild(txt);
-    // }
 }
 // GLOBAL FUNCTIONS: setup, update, render
 // -----------------------------------------------------------------------------

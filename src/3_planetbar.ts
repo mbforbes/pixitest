@@ -1,15 +1,17 @@
 /// <reference path="../lib/pixi.js.d.ts" />
 /// <reference path="../lib/stats.d.ts" />
 
-// GLOBAL OBJECT: app
+// Constants in this class (needs not be instantiated)
 // -----------------------------------------------------------------------------
 
 class Constants {
 	static LIGHT_BLUE = 0x4e929c;
 }
 
-interface App {
+// GLOBAL OBJECT: app
+// -----------------------------------------------------------------------------
 
+interface App {
 	// Core
 	renderer: PIXI.WebGLRenderer | PIXI.CanvasRenderer;
 	stage: PIXI.Container;
@@ -27,17 +29,10 @@ interface App {
 }
 var app = {} as App;
 
-// Our own objects to add functionality
+// Our own classes to add functionality
 // -----------------------------------------------------------------------------
 
-// TODO(mbforbes): Consider making a single contract:
-// - z
-// - game_update
-// - update
-//
-// ...and then providing a default implementation of game_update (as many as
-// necessary, hopefully one). Then make as few base classes that implement this
-// as needed and use those.
+// Base classes for game contract.
 
 interface GameObject extends PIXI.Container {
 	z: number;
@@ -57,19 +52,7 @@ class SelfUpdater {
 	}
 }
 
-// abstract class AbstractGameObject extends PIXI.DisplayObject implements GameObject {
-// 	z: number = 0;
-// 	children: GameObject[];
-
-// 	game_update(): void {
-// 		this.update();
-// 		for (var child of this.children) {
-// 			child.game_update();
-// 		}
-// 	}
-// 	abstract update(): void;
-// }
-
+// Our own classes that implement the base object.
 
 class MaxGraphics extends PIXI.Graphics implements GameObject {
 	z = 0;
@@ -90,42 +73,14 @@ abstract class MaxSprite extends PIXI.Sprite implements GameObject {
 	children = [];
 	updater = new SelfUpdater(this);
 	abstract update(): void;
-
-	// z: number;
-	// bar: ProgressBar;
-	// children: Updater[];
-
-	// game_update(): void {
-	// 	this.update();
-	// 	for (var child of this.children) {
-	// 		child.game_update();
-	// 	}
-	// }
-	// abstract update(): void;
 }
 
-class Planet extends MaxSprite {
+class Planet extends MaxSprite implements GameObject {
 	bar: ProgressBar;
 	update(): void {
 		this.rotation += 0.001;
 	}
 }
-
-// interface Updater extends PIXI.DisplayObject {
-// 	game_update(): void;
-// 	update(): void;
-// }
-
-// abstract class BasicUpdater extends PIXI.DisplayObject implements Updater {
-// 	children: Updater[] = [];
-// 	game_update(): void {
-// 		this.update();
-// 		for (var child of this.children) {
-// 			child.game_update();
-// 		}
-// 	}
-// 	abstract update(): void;
-// }
 
 interface StringSpriteMap {
 	[name: string]: MaxSprite;
@@ -160,8 +115,9 @@ class ProgressBar extends PIXI.Container implements GameObject {
 
 	z = 0;
 	children = [];
-	start: number = -1;
 	updater = new SelfUpdater(this);
+
+	start: number = -1;
 	goal: number = -1;
 	outline: MaxGraphics = new MaxGraphics();
 	fill: MaxGraphics = new MaxGraphics();
@@ -232,36 +188,6 @@ function earthClick (event: PIXI.interaction.InteractionEvent) {
 	// drawProgressOutline();
 }
 
-// function drawProgressOutline() {
-// 	// var g = new PIXI.Graphics();
-// 	var g = new MaxGraphics();
-// 	g.z = 2;
-// 	var earth: PIXI.Sprite = app.sprites['earth'];
-
-// 	var lx = Math.floor(earth.x - earth.width*(1-earth.anchor.x));
-// 	var ly = Math.floor(earth.y + earth.height*(1-earth.anchor.y));
-// 	var lw = Math.floor(earth.width);
-// 	var lh = 29;
-
-// 	console.log(lx);
-// 	console.log(ly);
-// 	console.log(lw);
-// 	console.log(lh);
-
-// 	// g.beginFill(0x7decfd, 0.0);
-// 	g.lineStyle(1, 0xffffff, 0.8);
-// 	// g.lineColor = 0xffffff;
-// 	// g.lineWidth = 1;
-// 	g.moveTo(lx, ly);
-// 	g.lineTo(lx, ly+lh);
-// 	g.lineTo(lx+lw, ly+lh);
-// 	g.lineTo(lx+lw, ly);
-// 	g.lineTo(lx, ly);
-// 	g.endFill();
-
-// 	app.stage.addChild(g)
-// }
-
 function drawGrid() {
 	// settings
 	var xstep = 100;
@@ -302,9 +228,6 @@ function drawGrid() {
 
 	g.endFill();
 	app.stage.addChild(g)
-	// for (var txt in ts) {
-	// 	app.stage.addChild(txt);
-	// }
 }
 
 // GLOBAL FUNCTIONS: setup, update, render
