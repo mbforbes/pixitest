@@ -1,7 +1,90 @@
 /// <reference path="../lib/pixi.js.d.ts" />
-var app = {};
-// TEMP CRAP BECAUSE I DON'T UNDERSTAND TYPESCRIPT YET
+/// <reference path="../lib/stats.d.ts" />
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+// GLOBAL OBJECT: app
 // -----------------------------------------------------------------------------
+var Constants = (function () {
+    function Constants() {
+    }
+    Constants.LIGHT_BLUE = 0x4e929c;
+    return Constants;
+}());
+var app = {};
+var SelfUpdater = (function () {
+    function SelfUpdater(parent) {
+        this.parent = parent;
+    }
+    ;
+    SelfUpdater.prototype.game_update = function () {
+        this.parent.update();
+        for (var _i = 0, _a = this.parent.children; _i < _a.length; _i++) {
+            var child = _a[_i];
+            child.updater.game_update();
+        }
+    };
+    return SelfUpdater;
+}());
+// abstract class AbstractGameObject extends PIXI.DisplayObject implements GameObject {
+// 	z: number = 0;
+// 	children: GameObject[];
+// 	game_update(): void {
+// 		this.update();
+// 		for (var child of this.children) {
+// 			child.game_update();
+// 		}
+// 	}
+// 	abstract update(): void;
+// }
+var MaxGraphics = (function (_super) {
+    __extends(MaxGraphics, _super);
+    function MaxGraphics() {
+        _super.apply(this, arguments);
+        this.z = 0;
+        this.children = [];
+        this.updater = new SelfUpdater(this);
+    }
+    MaxGraphics.prototype.update = function () { };
+    ;
+    return MaxGraphics;
+}(PIXI.Graphics));
+;
+var MaxText = (function (_super) {
+    __extends(MaxText, _super);
+    function MaxText() {
+        _super.apply(this, arguments);
+        this.z = 0;
+        this.children = [];
+        this.updater = new SelfUpdater(this);
+    }
+    MaxText.prototype.update = function () { };
+    ;
+    return MaxText;
+}(PIXI.Text));
+;
+var MaxSprite = (function (_super) {
+    __extends(MaxSprite, _super);
+    function MaxSprite() {
+        _super.apply(this, arguments);
+        this.z = 0;
+        this.children = [];
+        this.updater = new SelfUpdater(this);
+    }
+    return MaxSprite;
+}(PIXI.Sprite));
+var Planet = (function (_super) {
+    __extends(Planet, _super);
+    function Planet() {
+        _super.apply(this, arguments);
+    }
+    Planet.prototype.update = function () {
+        this.rotation += 0.001;
+    };
+    return Planet;
+}(MaxSprite));
 function depthCompare(a, b) {
     if (a.z < b.z) {
         return -1;
@@ -11,38 +94,116 @@ function depthCompare(a, b) {
     }
     return 0;
 }
+// some real meat
+var ProgressBar = (function (_super) {
+    __extends(ProgressBar, _super);
+    function ProgressBar(x, y, w, h) {
+        _super.call(this);
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+        // instance
+        this.z = 0;
+        this.children = [];
+        this.start = -1;
+        this.updater = new SelfUpdater(this);
+        this.goal = -1;
+        this.outline = new MaxGraphics();
+        this.fill = new MaxGraphics();
+        app.stage.addChild(this.outline);
+        app.stage.addChild(this.fill);
+    }
+    // static
+    ProgressBar.from_parent = function (parent) {
+        var lx = Math.floor(parent.x - parent.width * (1 - parent.anchor.x));
+        var ly = Math.floor(parent.y + parent.height * (1 - parent.anchor.y));
+        var lw = Math.floor(parent.width);
+        var lh = 29;
+        var p = new ProgressBar(lx, ly, lw, lh);
+        parent.addChild(p);
+        return p;
+    };
+    ProgressBar.prototype.build_appear = function () {
+        this.outline.clear();
+        this.outline.lineStyle(1, 0xffffff, 0.8);
+        this.outline.moveTo(this.x, this.y);
+        this.outline.lineTo(this.x, this.y + this.h);
+        this.outline.lineTo(this.x + this.w, this.y + this.h);
+        this.outline.lineTo(this.x + this.w, this.y);
+        this.outline.lineTo(this.x, this.y);
+        this.outline.endFill();
+    };
+    /// 0 <= portion <= 1
+    ProgressBar.prototype.fill_to = function (portion) {
+        if (portion < 0 || portion > 1) {
+            return;
+        }
+        this.fill.clear();
+        this.fill.beginFill(Constants.LIGHT_BLUE, 0.8);
+        // NOTE(mbforbes): Why this looks right with x and not x+1 is beyond me.
+        this.fill.drawRect(this.x, this.y + 1, (this.w - 1) * portion, this.h - 2);
+        this.fill.endFill();
+    };
+    ProgressBar.prototype.set_goal = function (ms) {
+        this.start = Date.now();
+        this.goal = this.start + ms;
+    };
+    ProgressBar.prototype.update = function () {
+        if (this.start != -1) {
+            var cur = Date.now();
+            if (cur > this.goal) {
+                this.fill_to(1);
+                this.start = -1;
+                this.goal = -1;
+            }
+            else {
+                var portion = (cur - this.start) / (this.goal - this.start);
+                this.fill_to(portion);
+            }
+        }
+    };
+    return ProgressBar;
+}(PIXI.Container));
 function dbg(text) {
     app.debugText.text += text + '\n';
 }
 function earthClick(event) {
-    console.log(event.target);
-    dbg('Mission initiated');
-    drawProgressOutline();
+    var sprite = event.target;
+    if (typeof sprite.bar === 'undefined') {
+        sprite.bar = ProgressBar.from_parent(sprite);
+        console.log(event.target);
+        dbg('Mission initiated');
+        sprite.bar.build_appear();
+        sprite.bar.set_goal(1000);
+    }
+    // drawProgressOutline();
 }
-function drawProgressOutline() {
-    var g = new PIXI.Graphics();
-    g.z = 2;
-    var earth = app.sprites['earth'];
-    var lx = Math.floor(earth.x - earth.width * (1 - earth.anchor.x));
-    var ly = Math.floor(earth.y + earth.height * (1 - earth.anchor.y));
-    var lw = Math.floor(earth.width);
-    var lh = 29;
-    console.log(lx);
-    console.log(ly);
-    console.log(lw);
-    console.log(lh);
-    // g.beginFill(0x7decfd, 0.0);
-    g.lineStyle(1, 0xffffff, 0.8);
-    // g.lineColor = 0xffffff;
-    // g.lineWidth = 1;
-    g.moveTo(lx, ly);
-    g.lineTo(lx, ly + lh);
-    g.lineTo(lx + lw, ly + lh);
-    g.lineTo(lx + lw, ly);
-    g.lineTo(lx, ly);
-    g.endFill();
-    app.stage.addChild(g);
-}
+// function drawProgressOutline() {
+// 	// var g = new PIXI.Graphics();
+// 	var g = new MaxGraphics();
+// 	g.z = 2;
+// 	var earth: PIXI.Sprite = app.sprites['earth'];
+// 	var lx = Math.floor(earth.x - earth.width*(1-earth.anchor.x));
+// 	var ly = Math.floor(earth.y + earth.height*(1-earth.anchor.y));
+// 	var lw = Math.floor(earth.width);
+// 	var lh = 29;
+// 	console.log(lx);
+// 	console.log(ly);
+// 	console.log(lw);
+// 	console.log(lh);
+// 	// g.beginFill(0x7decfd, 0.0);
+// 	g.lineStyle(1, 0xffffff, 0.8);
+// 	// g.lineColor = 0xffffff;
+// 	// g.lineWidth = 1;
+// 	g.moveTo(lx, ly);
+// 	g.lineTo(lx, ly+lh);
+// 	g.lineTo(lx+lw, ly+lh);
+// 	g.lineTo(lx+lw, ly);
+// 	g.lineTo(lx, ly);
+// 	g.endFill();
+// 	app.stage.addChild(g)
+// }
 function drawGrid() {
     // settings
     var xstep = 100;
@@ -50,7 +211,8 @@ function drawGrid() {
     var zidx = 100; // just something high to be on top of everything else
     var textc = '#aaaaaa';
     // make stuff
-    var g = new PIXI.Graphics();
+    // var g = new PIXI.Graphics();
+    var g = new MaxGraphics();
     g.z = zidx;
     // var ts: PIXI.Text[] = [];
     g.beginFill(0xffffff, 0.2);
@@ -58,19 +220,21 @@ function drawGrid() {
         if (x > 0) {
             g.drawRect(x, 0, 1, app.height);
         }
-        var t = new PIXI.Text(x.toString(), { font: '10px', fill: textc, align: 'left' });
-        t.x = x + 5;
-        t.y = 5;
-        t.z = zidx;
-        app.stage.addChild(t);
+        // var t = new PIXI.Text(x.toString(), { font: '10px', fill: textc, align: 'left' });
+        var xt = new MaxText(x.toString(), { font: '10px', fill: textc, align: 'left' });
+        xt.x = x + 5;
+        xt.y = 5;
+        xt.z = zidx;
+        app.stage.addChild(xt);
     }
     for (var y = ystep; y < app.height; y += ystep) {
         g.drawRect(0, y, app.width, 1);
-        var t = new PIXI.Text(y.toString(), { font: '10px', fill: textc, align: 'left' });
-        t.x = 5;
-        t.y = y + 5;
-        t.z = zidx;
-        app.stage.addChild(t);
+        // var yt = new PIXI.Text(y.toString(), { font: '10px', fill: textc, align: 'left' });
+        var yt = new MaxText(y.toString(), { font: '10px', fill: textc, align: 'left' });
+        yt.x = 5;
+        yt.y = y + 5;
+        yt.z = zidx;
+        app.stage.addChild(yt);
     }
     g.endFill();
     app.stage.addChild(g);
@@ -98,17 +262,17 @@ var setup = function () {
     app.children = [];
     // statistics collection
     app.stats = new Stats();
-    document.body.appendChild(app.stats.domElement);
+    document.body.appendChild(app.stats.dom);
     app.stats.dom.style.position = "relative";
     app.stats.dom.style.top = "-40px";
-    // TODO(mbforbes): Make some kind of debug text holder thing here.
     // POPULATE WITH OBJECTS
     // -------------------------------------------------------------------------
     // helper: grid!
     drawGrid();
     // game objects: add our earth
     var earth_texture = PIXI.Texture.fromImage('assets/earth.png');
-    var earth = new PIXI.Sprite(earth_texture);
+    // var earth = new PIXI.Sprite(earth_texture);
+    var earth = new Planet(earth_texture);
     earth.anchor.x = 0.5;
     earth.anchor.y = 0.5;
     earth.x = 400;
@@ -120,8 +284,11 @@ var setup = function () {
     // some kind of factory or class that tracks this for us...)
     app.sprites['earth'] = earth;
     app.stage.addChild(earth);
-    // TODO(mbforbes): Z ordering currently messed up: want to have text on top!
-    app.debugText = new PIXI.Text('', { font: '10px', fill: '#4e929c', align: 'center' });
+    app.debugText = new MaxText('', {
+        font: '10px',
+        fill: '#' + Constants.LIGHT_BLUE.toString(16),
+        align: 'center'
+    });
     app.debugText.x = 600;
     app.debugText.y = 20;
     app.debugText.z = 1;
@@ -140,7 +307,10 @@ var update = function () {
     // pre: start stats tracking
     app.stats.begin();
     // 1: run game logic
-    app.sprites['earth'].rotation += 0.001;
+    for (var s_name in app.sprites) {
+        app.sprites[s_name].updater.game_update();
+    }
+    // app.sprites['earth'].rotation += 0.001;
     // 2: call render
     render();
     // 3: ask PIXI to call this again
