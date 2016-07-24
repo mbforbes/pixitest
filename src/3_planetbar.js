@@ -15,35 +15,20 @@ var Constants = (function () {
     return Constants;
 }());
 var app = {};
-// SelfUpdater is a helper class so that classes that fulfill the GameObject
-// contract can easily implement the correct behavior by just having an instance
-// of one of these.
-var SelfUpdater = (function () {
-    function SelfUpdater(parent) {
-        this.parent = parent;
-    }
-    ;
-    SelfUpdater.prototype.game_update = function () {
-        this.parent.update();
-        for (var _i = 0, _a = this.parent.children; _i < _a.length; _i++) {
-            var child = _a[_i];
-            child.updater.game_update();
-        }
-    };
-    return SelfUpdater;
-}());
 // Our own base classes that implement the base object. The redundancy (setting
 // all of the base properties each time) is annoying but finite---there are only
 // a few core pixi classes. All actual classes that we make will subclass from
-// these few and will *only* describe unique behavior.
+// these few and will *only* describe unique behavior. (Another thought: maybe
+// this is silly? Perhaps we should only have the subclasses themselves, or make
+// these abstract. It seems silly to require everything to have z and update()
+// but then just give them dummy values---seems like we might want to have to
+// think about what these should be for each object.)
 // Base class for on screen objects with multiple visible components.
 var MaxDisplayObject = (function (_super) {
     __extends(MaxDisplayObject, _super);
     function MaxDisplayObject() {
         _super.apply(this, arguments);
         this.z = 0;
-        this.children = [];
-        this.updater = new SelfUpdater(this);
     }
     MaxDisplayObject.prototype.update = function () { };
     ;
@@ -55,8 +40,6 @@ var MaxGraphics = (function (_super) {
     function MaxGraphics() {
         _super.apply(this, arguments);
         this.z = 0;
-        this.children = [];
-        this.updater = new SelfUpdater(this);
     }
     MaxGraphics.prototype.update = function () { };
     ;
@@ -69,8 +52,6 @@ var MaxText = (function (_super) {
     function MaxText() {
         _super.apply(this, arguments);
         this.z = 0;
-        this.children = [];
-        this.updater = new SelfUpdater(this);
     }
     MaxText.prototype.update = function () { };
     ;
@@ -83,14 +64,27 @@ var MaxSprite = (function (_super) {
     function MaxSprite() {
         _super.apply(this, arguments);
         this.z = 0;
-        this.children = [];
-        this.updater = new SelfUpdater(this);
     }
     MaxSprite.prototype.update = function () { };
     ;
     return MaxSprite;
 }(PIXI.Sprite));
 // Actual "meat" classes with specific behavior are below.
+/// this isn't a game object and doesn't extend a pixi object because we want
+/// to treat it carefully to ensure we have the right behavior.
+var MaxStage = (function (_super) {
+    __extends(MaxStage, _super);
+    function MaxStage() {
+        _super.apply(this, arguments);
+    }
+    MaxStage.prototype.update = function () {
+        for (var _i = 0, _a = this.children; _i < _a.length; _i++) {
+            var child = _a[_i];
+            child.update();
+        }
+    };
+    return MaxStage;
+}(PIXI.Container));
 var Planet = (function (_super) {
     __extends(Planet, _super);
     function Planet(texture) {
@@ -142,6 +136,12 @@ var Planet = (function (_super) {
         bt.text = 'bounds';
         d.endFill;
     };
+    Planet.prototype.click = function (event) {
+        if (this.bar.goal == -1) {
+            this.bar.set_goal(1000);
+            dbg('Mission initiated');
+        }
+    };
     Planet.prototype.update = function () {
         this.rotation += 0.001;
         this.debug_draw();
@@ -150,9 +150,9 @@ var Planet = (function (_super) {
 }(MaxSprite));
 var ProgressBar = (function (_super) {
     __extends(ProgressBar, _super);
-    function ProgressBar(parent) {
+    function ProgressBar(master) {
         _super.call(this);
-        this.parent = parent;
+        this.master = master;
         // instance members
         this.start = -1;
         this.goal = -1;
@@ -160,28 +160,27 @@ var ProgressBar = (function (_super) {
         this.width = -1;
         this.outline = new MaxGraphics();
         this.fill = new MaxGraphics();
+        this.renderable = false;
+        this.interactiveChildren = false;
+        app.stage.addChild(this);
         app.stage.addChild(this.outline);
         app.stage.addChild(this.fill);
-        this.fill.z = parent.z + 1;
-        this.outline.z = parent.z + 2;
-        parent.addChild(this);
+        this.fill.z = master.z + 1;
+        this.outline.z = master.z + 2;
+        // master.addChild(this);
     }
-    // instance member buffers
-    // ppos: PIXI.Rectangle;
-    ProgressBar.prototype.calculateBounds = function () {
-    };
     /// called up updates
     ProgressBar.prototype.update_coords = function () {
-        // var ppos = this.parent.getBounds()
-        // var ppos = this.parent.getGlobalPosition(this.parent.position)
-        var px = this.parent.x;
-        var py = this.parent.y;
-        var pw = this.parent.width; //this.parent.width;
-        var ph = this.parent.height; // this.parent.height;
+        // var ppos = this.master.getBounds()
+        // var ppos = this.master.getGlobalPosition(this.master.position)
+        var px = this.master.x;
+        var py = this.master.y;
+        var pw = this.master.width; //this.master.width;
+        var ph = this.master.height; // this.master.height;
         // this.x = px + pw;
-        this.x = Math.floor(px - pw * (1 - this.parent.anchor.x));
+        this.x = Math.floor(px - pw * (1 - this.master.anchor.x));
         // this.y = py + ph;
-        this.y = Math.floor(py + ph * (1 - this.parent.anchor.y) +
+        this.y = Math.floor(py + ph * (1 - this.master.anchor.y) +
             ProgressBar.Y_BUFFER * ph);
         this.width = Math.floor(pw);
         this.height = 29;
@@ -246,6 +245,9 @@ var ProgressBar = (function (_super) {
     ProgressBar.Y_BUFFER = 0.1;
     return ProgressBar;
 }(MaxDisplayObject));
+// We only care about GameObjects, but pixi expects something that can work with
+// DisplayObjects when sorting container elements, so we have to satisfy it.
+// interface DisplayAndGameObject extends PIXI.DisplayObject, GameObject {}
 function depthCompare(a, b) {
     if (a.z < b.z) {
         return -1;
@@ -257,16 +259,6 @@ function depthCompare(a, b) {
 }
 function dbg(text) {
     app.debugText.text += text + '\n';
-}
-function earthClick(event) {
-    var sprite = event.target;
-    // console.log(sprite);
-    if (sprite.bar.goal == -1) {
-        console.log('goal was -1');
-        sprite.bar.set_goal(1000);
-        dbg('Mission initiated');
-    }
-    // console.log(app.stage);
 }
 function drawGrid() {
     // settings
@@ -316,11 +308,9 @@ var setup = function () {
     app.renderer = PIXI.autoDetectRenderer(app.width, app.height, { backgroundColor: 0x050505 });
     document.body.appendChild(app.renderer.view);
     // core: stage
-    app.stage = new PIXI.Container();
+    app.stage = new MaxStage();
     // US SETUP
     // -------------------------------------------------------------------------
-    app.sprites = {};
-    app.children = [];
     // statistics collection
     app.stats = new Stats();
     document.body.appendChild(app.stats.dom);
@@ -340,10 +330,10 @@ var setup = function () {
     earth.y = 300;
     earth.z = 0;
     earth.interactive = true;
-    earth.on('mousedown', earthClick);
+    earth.interactiveChildren = false;
+    earth.on('mousedown', earth.click, earth);
     // track it in our own object and add it to the stage. (Maybe we should have
     // some kind of factory or class that tracks this for us...)
-    app.sprites['earth'] = earth;
     app.stage.addChild(earth);
     app.debugText = new MaxText('', {
         font: '10px',
@@ -354,11 +344,6 @@ var setup = function () {
     app.debugText.y = 20;
     app.debugText.z = 1;
     app.stage.addChild(app.debugText);
-    // sort z order
-    // app.stage.children.sort(depthCompare)
-    // DEBUGGING
-    // var b = new ProgressBar(10, 12, 20, 20);
-    // b.build_appear();
     // KICK OFF THE GAME
     // -------------------------------------------------------------------------
     update();
@@ -371,9 +356,7 @@ var update = function () {
     // pre: start stats tracking
     app.stats.begin();
     // 1: run game logic
-    for (var s_name in app.sprites) {
-        app.sprites[s_name].updater.game_update();
-    }
+    app.stage.update();
     // 2: call render
     render();
     // 3: ask PIXI to call this again
@@ -383,7 +366,9 @@ var update = function () {
 };
 /// render is called by update
 var render = function () {
-    // sort children by z
+    // sort children by z. NOTE: in the future, could just (a) add children at
+    // the correct depth value and never have to sort or (b) sort only when
+    // children are added instead of every frame.
     app.stage.children.sort(depthCompare);
     // render everything in stage
     app.renderer.render(app.stage);

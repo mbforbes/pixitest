@@ -15,14 +15,11 @@ class Constants {
 interface App {
 	// Core
 	renderer: PIXI.WebGLRenderer | PIXI.CanvasRenderer;
-	stage: PIXI.Container;
+	stage: MaxStage;
 
 	// Our stuff
-	sprites: StringSpriteMap;
 	debugText: MaxText;
 	stats: Stats;
-	// children are stuff we need to call update on.
-	children: any[];
 
 	// some constants
 	width: number;
@@ -34,72 +31,61 @@ var app = {} as App;
 // -----------------------------------------------------------------------------
 
 // GameObject is the base contract that game objects must fulfill.
-interface GameObject {
+interface GameObject extends PIXI.DisplayObject {
 	// We want to be able to sort our objects by a z index for display order.
 	z: number;
-
-	// The children are updated by the updater.
-	children: GameObject[];
-
-	// The updater updates the self and the children.
-	updater: SelfUpdater;
 
 	// Never call update() directly. Only implement it. It's the updater's job
 	// to call update().
 	update(): void;
 }
 
-// SelfUpdater is a helper class so that classes that fulfill the GameObject
-// contract can easily implement the correct behavior by just having an instance
-// of one of these.
-class SelfUpdater {
-	constructor(public parent: GameObject) {};
-	game_update(): void {
-		this.parent.update();
-		for (var child of this.parent.children) {
-			child.updater.game_update();
-		}
-	}
-}
-
 // Our own base classes that implement the base object. The redundancy (setting
 // all of the base properties each time) is annoying but finite---there are only
 // a few core pixi classes. All actual classes that we make will subclass from
-// these few and will *only* describe unique behavior.
+// these few and will *only* describe unique behavior. (Another thought: maybe
+// this is silly? Perhaps we should only have the subclasses themselves, or make
+// these abstract. It seems silly to require everything to have z and update()
+// but then just give them dummy values---seems like we might want to have to
+// think about what these should be for each object.)
 
 // Base class for on screen objects with multiple visible components.
 class MaxDisplayObject extends PIXI.DisplayObject implements GameObject {
 	z = 0;
-	children = [];
-	updater = new SelfUpdater(this);
 	update(): void {};
 }
 
 // Base class for on screen line-art.
 class MaxGraphics extends PIXI.Graphics implements GameObject {
 	z = 0;
-	children = [];
-	updater = new SelfUpdater(this);
 	update(): void {};
 };
 
 // Base class for on screen text.
 class MaxText extends PIXI.Text implements GameObject {
 	z = 0;
-	children = [];
-	updater = new SelfUpdater(this);
 	update(): void {};
 };
 
 // Base class for on screen sprites.
 class MaxSprite extends PIXI.Sprite implements GameObject {
 	z = 0;
-	children = [];
-	updater = new SelfUpdater(this);
 	update(): void {};
 }
 
 // Actual "meat" classes with specific behavior are below.
+
+/// this isn't a game object and doesn't extend a pixi object because we want
+/// to treat it carefully to ensure we have the right behavior.
+class MaxStage extends PIXI.Container {
+	children: GameObject[]
+
+	update(): void {
+		for (var child of this.children) {
+			child.update();
+		}
+	}
+}
 
 class Planet extends MaxSprite {
 	debugDrawer: MaxGraphics = new MaxGraphics();
@@ -164,6 +150,13 @@ class Planet extends MaxSprite {
 		d.endFill;
 	}
 
+	click(event: PIXI.interaction.InteractionEvent): void {
+		if (this.bar.goal == -1) {
+			this.bar.set_goal(1000);
+			dbg('Mission initiated');
+		}
+	}
+
 	update(): void {
 		this.rotation += 0.001;
 
@@ -185,36 +178,32 @@ class ProgressBar extends MaxDisplayObject {
 	outline: MaxGraphics = new MaxGraphics();
 	fill: MaxGraphics = new MaxGraphics();
 
-	// instance member buffers
-	// ppos: PIXI.Rectangle;
-
-	calculateBounds() {
-
-	}
-
-	constructor(public parent: MaxSprite) {
+	constructor(public master: MaxSprite) {
 		super();
+		this.renderable = false;
+		this.interactiveChildren = false;
+		app.stage.addChild(this);
 		app.stage.addChild(this.outline);
 		app.stage.addChild(this.fill);
-		this.fill.z = parent.z + 1;
-		this.outline.z = parent.z + 2;
-		parent.addChild(this);
+		this.fill.z = master.z + 1;
+		this.outline.z = master.z + 2;
+		// master.addChild(this);
 	}
 
 	/// called up updates
 	update_coords(): void {
-		// var ppos = this.parent.getBounds()
-		// var ppos = this.parent.getGlobalPosition(this.parent.position)
-		var px = this.parent.x;
-		var py = this.parent.y;
-		var pw = this.parent.width; //this.parent.width;
-		var ph = this.parent.height; // this.parent.height;
+		// var ppos = this.master.getBounds()
+		// var ppos = this.master.getGlobalPosition(this.master.position)
+		var px = this.master.x;
+		var py = this.master.y;
+		var pw = this.master.width; //this.master.width;
+		var ph = this.master.height; // this.master.height;
 
 		// this.x = px + pw;
-		this.x = Math.floor(px - pw*(1-this.parent.anchor.x));
+		this.x = Math.floor(px - pw*(1-this.master.anchor.x));
 		// this.y = py + ph;
 		this.y = Math.floor(
-			py + ph*(1-this.parent.anchor.y) +
+			py + ph*(1-this.master.anchor.y) +
 			ProgressBar.Y_BUFFER*ph);
 		this.width = Math.floor(pw);
 		this.height = 29;
@@ -293,8 +282,8 @@ interface StringSpriteMap {
 
 // We only care about GameObjects, but pixi expects something that can work with
 // DisplayObjects when sorting container elements, so we have to satisfy it.
-interface DisplayAndGameObject extends PIXI.DisplayObject, GameObject {}
-function depthCompare(a: DisplayAndGameObject, b: DisplayAndGameObject) {
+// interface DisplayAndGameObject extends PIXI.DisplayObject, GameObject {}
+function depthCompare(a: GameObject, b: GameObject) {
 	if (a.z < b.z) {
 		return -1;
 	} if (a.z > b.z) {
@@ -305,17 +294,6 @@ function depthCompare(a: DisplayAndGameObject, b: DisplayAndGameObject) {
 
 function dbg(text: string) {
 	app.debugText.text += text + '\n';
-}
-
-function earthClick (event: PIXI.interaction.InteractionEvent) {
-	var sprite: Planet = event.target;
-	// console.log(sprite);
-	if (sprite.bar.goal == -1) {
-		console.log('goal was -1');
-		sprite.bar.set_goal(1000);
-		dbg('Mission initiated');
-	}
-	// console.log(app.stage);
 }
 
 function drawGrid() {
@@ -377,12 +355,10 @@ var setup = function() {
 	document.body.appendChild(app.renderer.view);
 
 	// core: stage
-	app.stage = new PIXI.Container();
+	app.stage = new MaxStage();
 
 	// US SETUP
 	// -------------------------------------------------------------------------
-	app.sprites = {};
-	app.children = [];
 
 	// statistics collection
 	app.stats = new Stats();
@@ -405,10 +381,10 @@ var setup = function() {
 	earth.y = 300;
 	earth.z = 0;
 	earth.interactive = true;
-	earth.on('mousedown', earthClick);
+	earth.interactiveChildren = false;
+	earth.on('mousedown', earth.click, earth);
 	// track it in our own object and add it to the stage. (Maybe we should have
 	// some kind of factory or class that tracks this for us...)
-	app.sprites['earth'] = earth;
 	app.stage.addChild(earth);
 
 	app.debugText = new MaxText('', {
@@ -420,13 +396,6 @@ var setup = function() {
 	app.debugText.y = 20;
 	app.debugText.z = 1;
 	app.stage.addChild(app.debugText)
-
-	// sort z order
-	// app.stage.children.sort(depthCompare)
-
-	// DEBUGGING
-	// var b = new ProgressBar(10, 12, 20, 20);
-	// b.build_appear();
 
 	// KICK OFF THE GAME
 	// -------------------------------------------------------------------------
@@ -442,9 +411,7 @@ var update = function() {
 	app.stats.begin();
 
 	// 1: run game logic
-	for (var s_name in app.sprites) {
-		app.sprites[s_name].updater.game_update();
-	}
+	app.stage.update();
 
 	// 2: call render
 	render();
@@ -458,7 +425,9 @@ var update = function() {
 
 /// render is called by update
 var render = function() {
-	// sort children by z
+	// sort children by z. NOTE: in the future, could just (a) add children at
+	// the correct depth value and never have to sort or (b) sort only when
+	// children are added instead of every frame.
 	app.stage.children.sort(depthCompare)
 
 	// render everything in stage
