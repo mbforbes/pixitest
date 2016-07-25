@@ -88,66 +88,11 @@ class MaxStage extends PIXI.Container {
 }
 
 class Planet extends MaxSprite {
-	debugDrawer: MaxGraphics = new MaxGraphics();
-	posText: MaxText = new MaxText('',  { font: '10px', fill: 0xffffff, align: 'left' });
-	lbText: MaxText = new MaxText('',  { font: '10px', fill: 0xffffff, align: 'left' });
-	bText: MaxText = new MaxText('',  { font: '10px', fill: 0xffffff, align: 'left' });
 	bar: ProgressBar;
 
 	constructor(texture: PIXI.Texture) {
 		super(texture);
 		this.bar = new ProgressBar(this);
-		app.stage.addChild(this.debugDrawer);
-		app.stage.addChild(this.posText);
-		app.stage.addChild(this.lbText);
-		app.stage.addChild(this.bText);
-	}
-
-	debug_draw(): void {
-		var d = this.debugDrawer;
-		var pt = this.posText;
-		var lt = this.lbText;
-		var bt = this.bText;
-
-		d.clear();
-
-		d.z = this.z + 1;
-		pt.z = this.z + 1;
-		lt.z = this.z + 1;
-		bt.z = this.z + 1;
-
-		// plot x, y position
-		d.beginFill(0xffffff, 0.9);
-		d.drawCircle(this.x, this.y, 5);
-		pt.text = this.x.toString() + ', ' + this.y.toString()
-		pt.x = this.x + 10
-		pt.y = this.y - 10
-
-		// plot local bounds
-		d.beginFill(0xffffff, 0.0);
-		d.lineStyle(1, 0xffffff, 0.9);
-		var lb = this.getLocalBounds();
-		d.drawRect(lb.x, lb.y, lb.height, lb.width);
-		lt.x = lb.x + lb.width/2;
-		lt.y = lb.y + lb.height/ 2;
-		lt.anchor.x = 0.5;
-		lt.anchor.y = 0.5;
-		lt.text = 'local bounds';
-
-		// plot "bounds"
-		var b = this.getBounds()
-		d.drawRect(b.x, b.y, b.height, b.width);
-		bt.x = b.x + b.width/2 + 10;
-		bt.y = b.y + b.height/2 - 15;
-		// bt.anchor.x = 0.5;
-		// bt.anchor.y = 0.5;
-		d.drawCircle(b.x + b.width/2, b.y + b.height/2, 5);
-
-		bt.text = 'bounds';
-
-
-
-		d.endFill;
 	}
 
 	click(event: PIXI.interaction.InteractionEvent): void {
@@ -158,17 +103,15 @@ class Planet extends MaxSprite {
 	}
 
 	update(): void {
-		this.rotation += 0.001;
-
-		this.debug_draw();
+		this.rotation += 0.01;
 	}
 }
 
 
 class ProgressBar extends MaxDisplayObject {
 	// static settings
-	// portion of parent's size to move below
-	static Y_BUFFER = 0.1;
+	// pixels to move below parent's lower edge
+	static Y_BUFFER = 10;
 
 	// instance members
 	start: number = -1;
@@ -192,21 +135,34 @@ class ProgressBar extends MaxDisplayObject {
 
 	/// called up updates
 	update_coords(): void {
-		// var ppos = this.master.getBounds()
+		var mb = this.master.getBounds()
 		// var ppos = this.master.getGlobalPosition(this.master.position)
-		var px = this.master.x;
-		var py = this.master.y;
-		var pw = this.master.width; //this.master.width;
-		var ph = this.master.height; // this.master.height;
 
-		// this.x = px + pw;
-		this.x = Math.floor(px - pw*(1-this.master.anchor.x));
-		// this.y = py + ph;
-		this.y = Math.floor(
-			py + ph*(1-this.master.anchor.y) +
-			ProgressBar.Y_BUFFER*ph);
-		this.width = Math.floor(pw);
+		// TODO(mbforbes): Curspot.
+		// master's "true" radius (assumes vertically symmetric)
+		var m_hrad = this.master.height/2;
+		var m_wrad = this.master.width/2;
+		var m_cx = mb.x + mb.width/2;
+		var m_cy = mb.y + mb.height/2;
+
+		this.x = m_cx - m_wrad;
+		this.y = m_cy + m_hrad + ProgressBar.Y_BUFFER;
+		this.width = this.master.width;
 		this.height = 29;
+
+		// var px = this.master.x;
+		// var py = this.master.y;
+		// var pw = this.master.width; //this.master.width;
+		// var ph = this.master.height; // this.master.height;
+
+		// // this.x = px + pw;
+		// this.x = Math.floor(px - pw*(1-this.master.anchor.x));
+		// // this.y = py + ph;
+		// this.y = Math.floor(
+		// 	py + ph*(1-this.master.anchor.y) +
+		// 	ProgressBar.Y_BUFFER*ph);
+		// this.width = Math.floor(pw);
+		// this.height = 29;
 	}
 
 	/// call before drawing to ensure you're not drawing off screen
@@ -238,16 +194,19 @@ class ProgressBar extends MaxDisplayObject {
 			return;
 		}
 
-		this.fill.clear();
+		this.clear();
+
+		this.draw_outline();
+
 		this.fill.beginFill(Constants.LIGHT_BLUE, 0.8);
 		this.fill.drawRect(this.x, this.y, (this.width)*portion, this.height);
 		this.fill.endFill();
 	}
 
-	// clear(): void {
-	// 	this.outline.clear()
-	// 	this.fill.clear();
-	// }
+	clear(): void {
+		this.outline.clear()
+		this.fill.clear();
+	}
 
 	set_goal(ms: number) {
 		this.start = Date.now();
@@ -256,16 +215,14 @@ class ProgressBar extends MaxDisplayObject {
 
 	update() {
 		this.update_coords();
-
 		if (this.start != -1) {
 			var cur = Date.now()
 			if (cur > this.goal) {
 				this.fill_to(1)
 				// this.clear();
-				this.start = -1;
-				this.goal = -1;
+				// this.start = -1;
+				// this.goal = -1;
 			}  else {
-				this.draw_outline();
 				var portion = (cur - this.start) / (this.goal - this.start);
 				this.fill_to(portion);
 			}
