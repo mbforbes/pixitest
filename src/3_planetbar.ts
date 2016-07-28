@@ -103,7 +103,7 @@ class Planet extends MaxSprite {
 	}
 
 	update(): void {
-		this.rotation += 0.01;
+		this.rotation += 0.001;
 	}
 }
 
@@ -219,9 +219,9 @@ class ProgressBar extends MaxDisplayObject {
 			var cur = Date.now()
 			if (cur > this.goal) {
 				this.fill_to(1)
-				// this.clear();
-				// this.start = -1;
-				// this.goal = -1;
+				this.clear();
+				this.start = -1;
+				this.goal = -1;
 			}  else {
 				var portion = (cur - this.start) / (this.goal - this.start);
 				this.fill_to(portion);
@@ -303,8 +303,8 @@ var setup = function() {
 	// CORE SETUP
 	// -------------------------------------------------------------------------
 	// pre: some us crap
-	app.width = 800;
-	app.height = 600;
+	app.width = 1800;
+	app.height = 1000;
 
 	// core: renderer
 	app.renderer = PIXI.autoDetectRenderer(

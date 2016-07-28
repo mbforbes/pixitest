@@ -98,7 +98,7 @@ var Planet = (function (_super) {
         }
     };
     Planet.prototype.update = function () {
-        this.rotation += 0.01;
+        this.rotation += 0.001;
     };
     return Planet;
 }(MaxSprite));
@@ -195,6 +195,9 @@ var ProgressBar = (function (_super) {
             var cur = Date.now();
             if (cur > this.goal) {
                 this.fill_to(1);
+                this.clear();
+                this.start = -1;
+                this.goal = -1;
             }
             else {
                 var portion = (cur - this.start) / (this.goal - this.start);
@@ -264,8 +267,8 @@ var setup = function () {
     // CORE SETUP
     // -------------------------------------------------------------------------
     // pre: some us crap
-    app.width = 800;
-    app.height = 600;
+    app.width = 1800;
+    app.height = 1000;
     // core: renderer
     app.renderer = PIXI.autoDetectRenderer(app.width, app.height, { backgroundColor: 0x050505 });
     document.body.appendChild(app.renderer.view);
