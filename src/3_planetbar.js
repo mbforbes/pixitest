@@ -12,9 +12,10 @@ var Constants = (function () {
     }
     Constants.LIGHT_BLUE = 0x4e929c;
     Constants.POINT_ZERO = new PIXI.Point(0, 0);
+    Constants.GAME_WIDTH = 800;
+    Constants.GAME_HEIGHT = 600;
     return Constants;
 }());
-var app = {};
 // Our own base classes that implement the base object. The redundancy (setting
 // all of the base properties each time) is annoying but finite---there are only
 // a few core pixi classes. All actual classes that we make will subclass from
@@ -94,7 +95,7 @@ var Planet = (function (_super) {
     Planet.prototype.click = function (event) {
         if (this.bar.goal == -1) {
             this.bar.set_goal(1000);
-            dbg('Mission initiated');
+            App.instance.dbg('Mission initiated');
         }
     };
     Planet.prototype.update = function () {
@@ -114,6 +115,7 @@ var ProgressBar = (function (_super) {
         this.width = -1;
         this.outline = new MaxGraphics();
         this.fill = new MaxGraphics();
+        var app = App.instance;
         this.renderable = false;
         this.interactiveChildren = false;
         app.stage.addChild(this);
@@ -126,8 +128,6 @@ var ProgressBar = (function (_super) {
     /// called up updates
     ProgressBar.prototype.update_coords = function () {
         var mb = this.master.getBounds();
-        // var ppos = this.master.getGlobalPosition(this.master.position)
-        // TODO(mbforbes): Curspot.
         // master's "true" radius (assumes vertically symmetric)
         var m_hrad = this.master.height / 2;
         var m_wrad = this.master.width / 2;
@@ -137,23 +137,11 @@ var ProgressBar = (function (_super) {
         this.y = m_cy + m_hrad + ProgressBar.Y_BUFFER;
         this.width = this.master.width;
         this.height = 29;
-        // var px = this.master.x;
-        // var py = this.master.y;
-        // var pw = this.master.width; //this.master.width;
-        // var ph = this.master.height; // this.master.height;
-        // // this.x = px + pw;
-        // this.x = Math.floor(px - pw*(1-this.master.anchor.x));
-        // // this.y = py + ph;
-        // this.y = Math.floor(
-        // 	py + ph*(1-this.master.anchor.y) +
-        // 	ProgressBar.Y_BUFFER*ph);
-        // this.width = Math.floor(pw);
-        // this.height = 29;
     };
     /// call before drawing to ensure you're not drawing off screen
     ProgressBar.prototype.check_coords = function () {
-        if (this.x < 0 || this.width < 0 || this.x + this.width > app.width ||
-            this.y < 0 || this.height < 0 || this.y + this.height > app.height) {
+        if (this.x < 0 || this.width < 0 || this.x + this.width > Constants.GAME_WIDTH ||
+            this.y < 0 || this.height < 0 || this.y + this.height > Constants.GAME_HEIGHT) {
             console.error('ProgressBar trying to render with bad dimensions.');
             console.error('x: ' + this.x + ', y: ' + this.y + ', w: ' + this.width + ', h: ' + this.height);
         }
@@ -222,122 +210,137 @@ function depthCompare(a, b) {
     }
     return 0;
 }
-function dbg(text) {
-    app.debugText.text += text + '\n';
-}
-function drawGrid() {
-    // settings
-    var xstep = 100;
-    var ystep = 100;
-    var zidx = 100; // just something high to be on top of everything else
-    var textc = '#aaaaaa';
-    // make stuff
-    // var g = new PIXI.Graphics();
-    var g = new MaxGraphics();
-    g.z = zidx;
-    // var ts: PIXI.Text[] = [];
-    g.beginFill(0xffffff, 0.2);
-    for (var x = 0; x < app.width; x += xstep) {
-        if (x > 0) {
-            g.drawRect(x, 0, 1, app.height);
+var App = (function () {
+    function App() {
+        this.renderer = PIXI.autoDetectRenderer(this.width, this.height, { backgroundColor: 0x050505 });
+        this.overlay = new MaxStage(); // HUD
+        this.width = Constants.GAME_WIDTH;
+        this.height = Constants.GAME_HEIGHT;
+        // make this statically accessible
+        App.instance = this;
+        // CORE SETUP
+        // -------------------------------------------------------------------------
+        // pre: some us crap
+        // this.width = Constants.GAME_WIDTH;
+        // this.height = Constants.GAME_HEIGHT;
+        // core: renderer
+        // this.renderer =
+        document.body.appendChild(this.renderer.view);
+        // core: stage
+        this.stage = new MaxStage();
+        // US SETUP
+        // -------------------------------------------------------------------------
+        // statistics collection
+        this.stats = new Stats();
+        document.body.appendChild(this.stats.dom);
+        this.stats.dom.style.position = "relative";
+        this.stats.dom.style.top = "-40px";
+        // POPULATE WITH OBJECTS
+        // -------------------------------------------------------------------------
+        // helper: grid!
+        this.drawGrid();
+        this.make_demo_objects();
+        // KICK OFF THE GAME
+        // -------------------------------------------------------------------------
+        // this.update();
+    }
+    ;
+    /// update is the main game loop. It:
+    /// - 1: runs update logic
+    /// - 2: calls render
+    /// - 3: asks PIXI to call it again
+    App.prototype.update = function () {
+        // pre: start stats tracking
+        this.stats.begin();
+        // 1: run game logic
+        this.stage.update();
+        // 2: call render
+        this.render();
+        // 3: ask PIXI to call this again
+        requestAnimationFrame(update);
+        // post: tells stats done
+        this.stats.end();
+    };
+    /// render is called by update
+    App.prototype.render = function () {
+        // sort children by z. NOTE: in the future, could just (a) add children at
+        // the correct depth value and never have to sort or (b) sort only when
+        // children are added instead of every frame.
+        this.stage.children.sort(depthCompare);
+        // render everything in stage
+        this.renderer.render(this.stage);
+    };
+    App.prototype.drawGrid = function () {
+        // settings
+        var xstep = 100;
+        var ystep = 100;
+        var zidx = 100; // just something high to be on top of everything else
+        var textc = '#aaaaaa';
+        // make stuff
+        // var g = new PIXI.Graphics();
+        var g = new MaxGraphics();
+        g.z = zidx;
+        // var ts: PIXI.Text[] = [];
+        g.beginFill(0xffffff, 0.2);
+        for (var x = 0; x < this.width; x += xstep) {
+            if (x > 0) {
+                g.drawRect(x, 0, 1, this.height);
+            }
+            // var t = new PIXI.Text(x.toString(), { font: '10px', fill: textc, align: 'left' });
+            var xt = new MaxText(x.toString(), { font: '10px', fill: textc, align: 'left' });
+            xt.x = x + 5;
+            xt.y = 5;
+            xt.z = zidx;
+            this.stage.addChild(xt);
         }
-        // var t = new PIXI.Text(x.toString(), { font: '10px', fill: textc, align: 'left' });
-        var xt = new MaxText(x.toString(), { font: '10px', fill: textc, align: 'left' });
-        xt.x = x + 5;
-        xt.y = 5;
-        xt.z = zidx;
-        app.stage.addChild(xt);
-    }
-    for (var y = ystep; y < app.height; y += ystep) {
-        g.drawRect(0, y, app.width, 1);
-        // var yt = new PIXI.Text(y.toString(), { font: '10px', fill: textc, align: 'left' });
-        var yt = new MaxText(y.toString(), { font: '10px', fill: textc, align: 'left' });
-        yt.x = 5;
-        yt.y = y + 5;
-        yt.z = zidx;
-        app.stage.addChild(yt);
-    }
-    g.endFill();
-    app.stage.addChild(g);
-}
-// GLOBAL FUNCTIONS: setup, update, render
-// -----------------------------------------------------------------------------
-/// setup calls update when it completes
-var setup = function () {
-    // CORE SETUP
-    // -------------------------------------------------------------------------
-    // pre: some us crap
-    app.width = 1800;
-    app.height = 1000;
-    // core: renderer
-    app.renderer = PIXI.autoDetectRenderer(app.width, app.height, { backgroundColor: 0x050505 });
-    document.body.appendChild(app.renderer.view);
-    // core: stage
-    app.stage = new MaxStage();
-    // US SETUP
-    // -------------------------------------------------------------------------
-    // statistics collection
-    app.stats = new Stats();
-    document.body.appendChild(app.stats.dom);
-    app.stats.dom.style.position = "relative";
-    app.stats.dom.style.top = "-40px";
-    // POPULATE WITH OBJECTS
-    // -------------------------------------------------------------------------
-    // helper: grid!
-    drawGrid();
-    // game objects: add our earth
-    var earth_texture = PIXI.Texture.fromImage('assets/earth.png');
-    // var earth = new PIXI.Sprite(earth_texture);
-    var earth = new Planet(earth_texture);
-    earth.anchor.x = 0.2;
-    earth.anchor.y = 0.2;
-    earth.x = 400;
-    earth.y = 300;
-    earth.z = 0;
-    earth.interactive = true;
-    earth.interactiveChildren = false;
-    earth.on('mousedown', earth.click, earth);
-    // track it in our own object and add it to the stage. (Maybe we should have
-    // some kind of factory or class that tracks this for us...)
-    app.stage.addChild(earth);
-    app.debugText = new MaxText('', {
-        font: '10px',
-        fill: '#' + Constants.LIGHT_BLUE.toString(16),
-        align: 'center'
-    });
-    app.debugText.x = 600;
-    app.debugText.y = 20;
-    app.debugText.z = 1;
-    app.stage.addChild(app.debugText);
-    // KICK OFF THE GAME
-    // -------------------------------------------------------------------------
-    update();
-};
-/// update is the main game loop. It:
-/// - 1: runs update logic
-/// - 2: calls render
-/// - 3: asks PIXI to call it again
-var update = function () {
-    // pre: start stats tracking
-    app.stats.begin();
-    // 1: run game logic
-    app.stage.update();
-    // 2: call render
-    render();
-    // 3: ask PIXI to call this again
-    requestAnimationFrame(update);
-    // post: tells stats done
-    app.stats.end();
-};
-/// render is called by update
-var render = function () {
-    // sort children by z. NOTE: in the future, could just (a) add children at
-    // the correct depth value and never have to sort or (b) sort only when
-    // children are added instead of every frame.
-    app.stage.children.sort(depthCompare);
-    // render everything in stage
-    app.renderer.render(app.stage);
-};
+        for (var y = ystep; y < this.height; y += ystep) {
+            g.drawRect(0, y, this.width, 1);
+            // var yt = new PIXI.Text(y.toString(), { font: '10px', fill: textc, align: 'left' });
+            var yt = new MaxText(y.toString(), { font: '10px', fill: textc, align: 'left' });
+            yt.x = 5;
+            yt.y = y + 5;
+            yt.z = zidx;
+            this.stage.addChild(yt);
+        }
+        g.endFill();
+        this.stage.addChild(g);
+    };
+    App.prototype.make_demo_objects = function () {
+        // game objects: add our earth
+        var earth_texture = PIXI.Texture.fromImage('assets/earth.png');
+        var earth = new Planet(earth_texture);
+        earth.anchor.x = 0.2;
+        earth.anchor.y = 0.2;
+        earth.x = 400;
+        earth.y = 300;
+        earth.z = 0;
+        earth.interactive = true;
+        earth.interactiveChildren = false;
+        earth.on('mousedown', earth.click, earth);
+        // track it in our own object and add it to the stage. (Maybe we should have
+        // some kind of factory or class that tracks this for us...)
+        this.stage.addChild(earth);
+        this.debugText = new MaxText('', {
+            font: '10px',
+            fill: '#' + Constants.LIGHT_BLUE.toString(16),
+            align: 'center'
+        });
+        this.debugText.x = 600;
+        this.debugText.y = 20;
+        this.debugText.z = 1;
+        this.stage.addChild(this.debugText);
+    };
+    App.prototype.dbg = function (text) {
+        this.debugText.text += text + '\n';
+    };
+    App.prototype.make_edge_rects = function () {
+    };
+    return App;
+}());
 // EXECUTION BEGINS HERE
 // -----------------------------------------------------------------------------
-setup();
+var app = new App();
+var update = function () {
+    App.instance.update();
+};
+update();
